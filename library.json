@@ -1,0 +1,21 @@
+{
+	"name": "MGraphQL",
+	"keywords": "communication, websocket, client",
+	"description": "Arduino library that implements parts of the WebSocket client protocol for ESP32 microcontrollers.",
+	"homepage": "",
+	"repository": {
+		"type": "git",
+		"url": ""
+	},
+	"dependencies": [],
+	"frameworks": "arduino",
+	"platforms": [
+		"espressif32"
+	],
+	"authors": {
+		"name": "Marcelo Lopes",
+		"email": "marcelo.utfpr@me.com"
+	},
+	"version": "1.0.0",
+	"license": "0BSD"
+}

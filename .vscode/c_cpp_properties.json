@@ -1,0 +1,31 @@
+{
+	"configurations": [
+		{
+			"name": "Arduino",
+			"includePath": [
+				"${default}",
+				"${workspaceFolder}/**",
+				"${workspaceFolder}/include",
+				"${workspaceFolder}/../cmake-msvc/include",
+				"${workspaceFolder}/include",
+				"/Users/mlsilva/Documents/Arduino/libraries/**",
+				"/Users/mlsilva/Library/Arduino15/packages/esp32/hardware/esp32/3.0.5/**", // Exemplo para ESP32
+				"/Users/mlsilva/Library/Arduino15/packages/builtin/tools/**", // Exemplo para ESP32
+				"/Users/mlsilva/Library/Arduino15/packages/arduino/hardware/esp32/2.0.18-20240930.arduino3/**" // Exemplo para ESP32
+			],
+			"browse": {
+				"path": [
+					"${workspaceFolder}",
+					"/Users/mlsilva/Documents/Arduino/libraries/MGraphQL/src"
+				],
+				"limitSymbolsToIncludedHeaders": true,
+				"databaseFilename": ""
+			},
+			"compilerPath": "/usr/bin/clang",
+			"cStandard": "c11",
+			"cppStandard": "c++17",
+			"intelliSenseMode": "macos-clang-arm64"
+		}
+	],
+	"version": 4
+}
