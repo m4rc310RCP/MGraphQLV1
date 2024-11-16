@@ -22,7 +22,7 @@ void setup(){
   // });
   delay(10);
 
-  gql.begin("dev-thermo.m4rc310.com.br");
+  gql.begin("dev-thermo.m4rc310.com.br", 443, "/graphql");
 
 //  WiFi.begin(ssid, password);
   
