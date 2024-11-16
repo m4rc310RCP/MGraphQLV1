@@ -1,6 +1,6 @@
 #include "MGraphQL.h"
 
-MGraphQL gql;
+ MGraphQL gql;
 
 void setup(){
   Serial.begin(115200);

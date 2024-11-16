@@ -4,6 +4,8 @@
 #define MWEBSOCKET_H
 #endif
 
+#include "MUtils.h"
+
 class MWebSocket {
 	private:
 		char* _host;
