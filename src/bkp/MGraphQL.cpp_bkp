@@ -1,0 +1,5 @@
+#include "MGraphQL.h"
+
+bool MGraphQL::begin(WiFiClientSecure &client, const char* host, uint16_t port, const char* path, const char* protocol){
+	return _ws.handshake(client, host, port, path, protocol);
+}

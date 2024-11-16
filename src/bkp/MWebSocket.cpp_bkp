@@ -1,0 +1,124 @@
+#include "MWebSocket.h"
+
+#define LOG_TAG "websocket"
+
+#define CRLF    "\r\n"
+#define CR      '\r'
+#define LF      '\n'
+#define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+const String HTTP_STATUS_LINE_101 = "http/1.1 101 ";
+const String HTTP_UPGRADE_WEBSOCKET = "upgrade: websocket";
+const String HTTP_CONNECTION_UPGRADE = "connection: upgrade";
+const String HTTP_HEADER_SEC_WEBSOCKET_ACCEPT = "sec-websocket-accept: ";
+
+bool MWebSocket::handshake(WiFiClientSecure &client, const char* host, uint16_t port, const char* path, const char* protocol){
+	_ws_client = client;
+	if (!_ws_client.connected()) {
+		return false;
+	}
+	
+	String temp;
+
+	int bite;
+	bool foundupgrade = false;
+	unsigned long intkey[2];
+	String serverKey;
+	char keyStart[17];
+	char b64Key[25];
+	String key = "------------------------";
+
+	//randomSeed(analogRead(0));
+	randomSeed(analogRead(0));
+
+	for (int i=0; i<16; ++i) {
+			keyStart[i] = (char)random(1, 256);
+	}
+
+	base64_encode(b64Key, keyStart, 16);
+
+	for (int i=0; i<24; ++i) {
+			key[i] = b64Key[i];
+	}
+
+	// _ws_client.printf("GET %s HTTP/1.1%s", path, CRLF);
+	// _ws_client.printf("Upgrade: websocket%s", CRLF);
+	// _ws_client.printf("Connection: Upgrade%s", CRLF);
+	// _ws_client.printf("Host: %s%s", host, CRLF);
+	// _ws_client.printf("Sec-WebSocket-Key: %s%s", key, CRLF);
+	// _ws_client.printf("Sec-WebSocket-Protocol: %s%s", protocol, CRLF);
+	// _ws_client.printf("Sec-WebSocket-Version: 13%s", CRLF);
+	// _ws_client.print(CRLF);
+
+	char buf[1024];
+	sprintf_P(buf, PSTR("GET %s HTTP/1.1\r\n"
+                      "Host: %s\r\n"
+                      "Upgrade: websocket\r\n"
+                      "Connection: Upgrade\r\n"
+                      "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+                      "Origin: https://%s\r\n"
+                      "Sec-WebSocket-Protocol: subscriptions-transport-ws\r\n"
+                      "Sec-WebSocket-Version: 13\r\n\r\n"),
+  path, host, host);
+	
+	while (_ws_client.connected() && !_ws_client.available()) {
+		delay(100);
+		Serial.println("Waiting...");  
+  }
+
+	_ws_client.write((uint8_t*)buf, strlen(buf));
+	unsigned long timeout = millis() + 10000;
+	int valread = 0;
+	while (millis() < timeout) {
+		if (_ws_client.available()) {
+			char bufferResp[1024];
+			valread = _ws_client.readBytes((uint8_t*)bufferResp, sizeof(bufferResp));
+			bufferResp[valread] = '\0';
+			Serial.println(bufferResp);  
+			break;
+		}
+	}
+
+
+	//  while ((bite = _ws_client.read()) != -1) {
+	// 	temp += (char)bite;
+	// 	if ((char)bite == '\n') {
+	// 		Serial.print("Got Header: " + temp);
+	// 		temp = "";
+	// 	}
+	// 	if (!_ws_client.available()) {
+  //     delay(20);
+  //   }
+	//  }
+
+ 	// while (_ws_client->connected() && !_ws_client->available()) {
+	// 	delay(100);
+	// }
+
+	// String temp;
+	// while ((bite = socket_client->read()) != -1) {
+	// 	temp += (char)bite;
+	// 	if ((char)bite == '\n') {
+
+	// 	}
+	// }
+
+// _ws_client.print(F("GET "));
+// _ws_client.print("/graphql");
+// _ws_client.print(F(" HTTP/1.1\r\n"));
+// _ws_client.print(F("Upgrade: websocket\r\n"));
+// _ws_client.print(F("Connection: Upgrade\r\n"));
+// _ws_client.print(F("Host: "));
+// _ws_client.print("dev-thermo.m4rc310.com.br");
+// _ws_client.print(CRLF); 
+// _ws_client.print(F("Sec-WebSocket-Key: "));
+// _ws_client.print("89huyuyu");
+// _ws_client.print(CRLF);
+// _ws_client.print(F("Sec-WebSocket-Protocol: "));
+// _ws_client.print("graphql-ws");
+// _ws_client.print(CRLF);
+// _ws_client.print(F("Sec-WebSocket-Version: 13\r\n"));
+// _ws_client.print(CRLF);
+
+	return true;
+}

@@ -1,0 +1,16 @@
+#ifndef MGRAPHQL_H
+#define MGRAPHQL_H
+
+#include "MWebSocket.h"
+
+class MGraphQL{
+	
+private:
+	MWebSocket _ws;
+public:
+	bool begin(WiFiClientSecure &client, const char* host, uint16_t port = 443, const char* path = "/graphql", const char* protocol = "graphql-ws");
+	// bool handshake(WiFiClient &client, const char* host, uint16_t port, const char* path){return _ws.handshake(client, host, port, path);};
+//	bool handshake(WiFiClient &client){return _ws.handshake(client);};
+};
+
+#endif

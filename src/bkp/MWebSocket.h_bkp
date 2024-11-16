@@ -1,0 +1,20 @@
+#ifndef MWEBSOCKET_H
+#define MWEBSOCKET_H
+
+#include <Arduino.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <Stream.h>
+
+#include <Client.h>
+#include <StreamString.h>
+#include "MBase64.h"
+
+class MWebSocket {
+	private:
+		WiFiClientSecure _ws_client;
+	public:
+		bool handshake(WiFiClientSecure &client, const char* host, uint16_t port, const char* path, const char* protocol);
+};
+
+#endif

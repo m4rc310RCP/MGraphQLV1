@@ -11,6 +11,9 @@
 				"/Users/mlsilva/Documents/Arduino/libraries/**",
 				"/Users/mlsilva/Library/Arduino15/packages/esp32/hardware/esp32/3.0.5/**", // Exemplo para ESP32
 				"/Users/mlsilva/Library/Arduino15/packages/builtin/tools/**", // Exemplo para ESP32
+				"/Users/mlsilva/Library/Arduino15/packages/arduino/tools/**", 
+				"/Users/mlsilva/Library/Arduino15/packages/esp32/tools/**", 
+				"/Users/mlsilva/Library/Arduino15/packages/esp32/hardware/esp32/3.0.5/libraries/WiFi/src/**", 
 				"/Users/mlsilva/Library/Arduino15/packages/arduino/hardware/esp32/2.0.18-20240930.arduino3/**" // Exemplo para ESP32
 			],
 			"browse": {
