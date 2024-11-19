@@ -6,6 +6,7 @@
 MGraphQL::MGraphQL(bool secure){
 	this->secure = secure;
 	this->client = secure ? new WiFiClientSecure : new WiFiClient;
+	// this->client = secure ? std::make_unique<WiFiClientSecure>() : std::make_unique<WiFiClient>();
 	// if (secure){
 	// 	this->client = new WiFiClientSecure();
 	// 	((WiFiClientSecure)client).setInsecure();
@@ -75,7 +76,6 @@ void MGraphQL::requestWsUpdate(){
 				endOfResponse = true;
 			}
 		}
-
 		if (wsupdated){
 			mprint("\nWebsocket upgrade headers success!\n");
 			handshake();
@@ -84,7 +84,6 @@ void MGraphQL::requestWsUpdate(){
 		mprint("\nUnable to connect to the server\n");
 	}
 }
-
 
 void MGraphQL::onEvent(std::function<void(_control_event)> event){
 	this->_callbackControlEvent = event;
@@ -97,7 +96,7 @@ void MGraphQL::mprint(char* format, ...){
 	if(this->_callbackSerialPrint != nullptr){
 		va_list args;
 		va_start(args, format);
-		size_t size = 256; 
+		size_t size = 1024; 
 		char buffer[size];
 		vsnprintf(buffer, size, format, args);
 		_callbackSerialPrint(buffer);
@@ -130,18 +129,34 @@ void MGraphQL::connectWiFi(char * wifi_ssid, char * wifi_password){
 }
 
 void MGraphQL::loop(void){
-	if(connectingWiFi && WiFi.status() != WL_CONNECTED){
-		connectingWiFi = false;
-		callEvent(MWS_CONNECT_TO_WIFI);
-	}else{
-		if (canRead && client->available()){
-			//canRead = false;
-			String msg;
-			if (getMessage(msg)){
-				mprint("Handshake: %s \n", msg.c_str());
-			}
-		}
+	if (!isConnected()){
+		mprint("....\n");
+		delay(1000);
+		//requestWsUpdate();
 	}
+
+	// if(connectingWiFi && WiFi.status() != WL_CONNECTED){
+	// 	connectingWiFi = false;
+	// 	callEvent(MWS_CONNECT_TO_WIFI);
+	// }else{
+	// 	String msg;
+	// 	if (getMessage(msg)){
+	// 		//mprint("available: \n");
+	// 		DynamicJsonDocument data(2048);
+	// 		DeserializationError error = deserializeJson(data, msg);
+	// 		if (error) {
+	// 			mprint("Error in JSON: %s", error.c_str());
+	// 		}else{
+	// 			String id = data["id"];
+	// 			auto it = callbackFunction.find(id);
+	// 			if (it != callbackFunction.end()) {
+	// 				it->second(data);
+	// 			}else{
+	// 				mprint("No callback for ID: %s", id);
+	// 			}
+	// 		}
+	// 	}
+	// }
 }
 
 void MGraphQL::mwrite(const char* buffer, std::function<void(String response)> payload) {
@@ -159,12 +174,6 @@ void MGraphQL::mwrite(const char* buffer, std::function<void(String response)> p
 							payload(temp);
 						}
 					}
-
-
-					// char buf[1024];
-					// valread = client->readBytes((uint8_t*)buf, sizeof(buf));
-					// buf[valread] = '\0';
-					// payload(buf); 
 					break;
 				}
 			}
@@ -193,24 +202,14 @@ bool MGraphQL::handshake(){
 			}else{
 				const char* type = doc["type"];
 				if (strcmp(type, "connection_ack") == 0) {
-					mprint("Resp: %s", type);
-					String paydata = R"({"id":"1","type":"start","payload":{"variables":{},"extensions":{},"operationName":"ServerInfo","query":"subscription ServerInfo {\n  mostrarInformacoesServidor {\n    dt_pulso\n  }\n}\n"}})";
-					send(paydata);
-					canRead = true;
+					startMonitor();
+					callEvent(MWS_REGISTER_SUBSCRIPTION);
 				}
 			}
 			break;
 		}
 		delay(100);
 	}
-	
-	//canRead = true;
-	
-	// const char *buff = spayload.c_str();
-	// mprint("Waiting for handshake.\n");
-	// mwrite(buff, [&](String msg){
-	// 	mprint("Handshake: %s \n", msg.c_str());
-	// });
 	return true;
 }
 
@@ -256,10 +255,8 @@ void MGraphQL::send(const String& str){
 }
 
 bool MGraphQL::getMessage(String& message){
-	if (!client->connected()) {	return false; }
-	if(!client->available()){
-		return false;
-	}
+	//if (!client->connected()) {	return false; }
+	//if(!client->available()){return false;}
 	// 1. read type and fin
 	unsigned int msgtype = timedRead();
 	if (!client->connected()) {return false;}
@@ -307,12 +304,138 @@ int MGraphQL::timedRead(){
 	return client->read();
 }
 
-		// void MGraphQL::write(uint8_t data){
-		// 	if (client->connected()){
-		// 		client->write(data, strlen(data)); 
+void MGraphQL::subscription(DynamicJsonDocument variables, const String& query, std::function<void(DynamicJsonDocument)> callback){
+		String query_ = formatQuery(query);
+		size_t capacity = JSON_OBJECT_SIZE(4) + JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(1) + variables.memoryUsage() + query_.length() + 256;
+
+    DynamicJsonDocument doc(capacity);
+
+		String _id = String(++_subscriptionId); 
+
+		doc["id"] = _id;
+    doc["type"] = "start";
+
+    JsonObject payload = doc.createNestedObject("payload");
+    payload["operationName"] = "SubControl";
+    payload["query"] = query_;
+
+		String variablesString;
+    serializeJson(variables, variablesString);
+    payload["variables"] = serialized(variablesString);
+
+    payload.createNestedObject("extensions"); 
+
+		registerCallback(_id, [&](DynamicJsonDocument data){
+			mprint("call back");
+			//mprint("call back %s", data["id"]);
+		});
+
+		// registerCallback(_id, [&](DynamicJsonDocument data){
+		// 	mprint("call back");
+		// });
+
+
+		// onStreaming([&](DynamicJsonDocument data_){
+
+		// 	// String jsonString;
+		// 	// 	serializeJson(data_, jsonString);
+
+		// 	// 	mprint("~> %s", jsonString);
+		// 	String id = data_["id"];
+			
+		// 	mprint("~> %s - %s\n", id, _id);
+
+		// 	if (id == _id){
+		// 		JsonObject payload = data_["payload"];
+		// 		if (!payload.isNull()) {
+		// 			JsonObject data = payload["data"];
+		// 			if (!data.isNull()) {
+		// 				String json;
+		// 				serializeJson(data_, json);
+		// 				mprint("~> %s \n", json);
+		// 				DynamicJsonDocument nestedDoc(1024);
+		// 				serializeJson(nestedDoc, json);
+		// 				callback(nestedDoc);
+		// 			}
+		// 		}
+				
+
+
+		// 		// JsonObject nestedData = data_["data"].as<JsonObject>();
+		// 		// if (nestedData) {
+		// 		// 	String jsonString;
+    //     // 	serializeJson(nestedData, jsonString);
+
+		// 		// 	DynamicJsonDocument nestedDoc(1024);
+		// 		// 	DeserializationError error = deserializeJson(nestedDoc, jsonString);
+    //     //     if (error) {
+    //     //         mprint("Erro ao obter data value: %s", error.c_str());
+    //     //     } else {
+		// 		// 			mprint("~> %s", jsonString);
+		// 		// 			callback(nestedDoc);
+    //     //     }
+		// 		// }
+		// 		// DynamicJsonDocument nestedDoc(1024);
+		// 		// deserializeJson(nestedDoc, data_["data"].as<String>());
+		// 		// callback(nestedDoc);
 		// 	}
-		// }
-		
-		// void MGraphQL::write(char * data){
-		// 	write((uint8_t)data); 
-		// }
+		// });
+
+    String jsonString;
+    serializeJson(doc, jsonString);
+		send(jsonString);
+}
+
+String MGraphQL::getDeviceSerialNumber(){
+	uint64_t chipId = ESP.getEfuseMac();
+	char serialNumber[18];
+  snprintf(serialNumber, sizeof(serialNumber), "%04X%08X",(uint16_t)(chipId >> 32), (uint32_t)chipId);
+	return String(serialNumber);
+}
+
+String MGraphQL::formatQuery(const String& query){
+	String input = query; 
+	input.replace("\n", " ");
+  input.replace("\r", " ");
+  input.replace("\t", " ");
+  input.trim();
+
+	String result = "";
+    bool inSpace = false;
+
+    for (size_t i = 0; i < input.length(); i++) {
+        char c = input[i];
+        if (c == ' ' || c == '\n' || c == '\r' || c == '\t') {
+            if (!inSpace) {
+                result += ' ';  // Adiciona um único espaço
+                inSpace = true;
+            }
+        } else {
+            result += c;  // Adiciona o caractere normal
+            inSpace = false;
+        }
+    }
+
+    result.trim();  // Remove espaços no início e no fim
+    return result;
+}
+
+void MGraphQL::startMonitor(){
+	mprint("start monitor");
+	_subscriptionId = 1;
+	canRead = true;
+}
+
+void MGraphQL::callEvent(DynamicJsonDocument data){
+	if (_callbackStreaming != nullptr){
+		_callbackStreaming(data);
+	}
+}
+
+void MGraphQL::registerCallback(const String& id, std::function<void(DynamicJsonDocument)> callback){
+	callbackFunction[id] = callback;
+}
+
+bool MGraphQL::isConnected(){
+	return client->connected() && canRead;
+}
