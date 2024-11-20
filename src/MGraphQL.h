@@ -16,27 +16,28 @@
 
 
 typedef enum {
-	MWS_CONNECT_WIFI = 0,
-	MWS_CONNECT_WS = 1
+	MWS_CONNECT_TO_WIFI    = 0,
+	MWS_CONNECT_TO_SERVER  = 1,
+	MWS_CONNECT_TO_WS      = 2,
+	MWS_PROCESS_ACK        = 3,
+	MWS_INIT_SUBSCRIPTIONS = 4,
+	MWS_INIT_STREAMING     = 5
 } mws_event_t;
 
 class MGraphQL{
 	private:
 		char* _host;
 		char* _path;
-		int _port;
-		mws_event_t _mws_event;
-		std::function<void(mws_event_t event)> _callback_ws_event = nullptr;
+		int   _port;
 		std::function<void(char *message)> _callback_serial_print = nullptr;
 	public:
 		//~> Begin GraphQL ------------------------------------------------//
 		bool begin(char* host, int port = 433, char* path = "/graphql");
-		//~> WS event -----------------------------------------------------//
-		void setGraphQLEvent(std::function<void(mws_event_t event)> callback){ this->_callback_ws_event = callback; };
-		//~> Messages for Serial ------------------------------------------//
-		void setSerialListener(std::function<void(char *message)> callback);
+		void setSerialListener(std::function<void(char *message)> callback) {this->_callback_serial_print = callback;};
     void mprint(const char *format, ...);
-		//-----------------------------------------------------------------//
+		String getDeviceSerialNumber();
+		//~> Begin GraphQL ------------------------------------------------//
+		
 };
 
 #endif

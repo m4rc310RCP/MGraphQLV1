@@ -4,12 +4,12 @@ bool MGraphQL::begin(char* host, int port, char* path){
 	this->_host = host;
 	this->_port = port;
 	this->_path = path;
-	//_callback_ws_event(MWS_CONNECT_WIFI);
+	// --------------------------------------------------------------------------------
+	mprint("\nStartup application ESP32 S/N: %s\n", getDeviceSerialNumber());
+	// --------------------------------------------------------------------------------
+	
+	return true;
 }
-
-void MGraphQL::setSerialListener(std::function<void(char *message)> callback){ 
-	_callback_serial_print = callback;
-};
 
 void MGraphQL::mprint(const char *format, ...) {
 	  if (_callback_serial_print) {
@@ -23,5 +23,12 @@ void MGraphQL::mprint(const char *format, ...) {
     } else {
         Serial.println("** Callback não definido **");
     }
+}
+
+String MGraphQL::getDeviceSerialNumber(){
+	uint64_t chipId = ESP.getEfuseMac();
+	char serialNumber[18];
+  snprintf(serialNumber, sizeof(serialNumber), "%04X%08X",(uint16_t)(chipId >> 32), (uint32_t)chipId);
+	return String(serialNumber);
 }
 
