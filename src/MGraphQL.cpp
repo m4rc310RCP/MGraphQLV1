@@ -1,13 +1,58 @@
 #include "MGraphQL.h"
 
+MGraphQL::MGraphQL(bool secure){
+	this->secure = secure;
+	this->client = secure ? new WiFiClientSecure() : new WiFiClient();
+	if (secure){
+		WiFiClientSecure* secureClient = static_cast<WiFiClientSecure*>(this->client);
+		mprint("Disable SSL validation\n");
+		secureClient->setInsecure();
+	}
+}
+
+MGraphQL::~MGraphQL() {
+	delete this->client;
+}
+
 bool MGraphQL::begin(char* host, int port, char* path){
-	this->_host = host;
-	this->_port = port;
-	this->_path = path;
 	// --------------------------------------------------------------------------------
 	mprint("\nStartup application ESP32 S/N: %s\n", getDeviceSerialNumber());
 	// --------------------------------------------------------------------------------
-	
+	onEvent<ConnectionInfo>(MWS_WIFI_CONNECTION_INFO, [&](ConnectionInfo info){
+		if(info.sucess){
+			mprint("\nWiFi connected in: %s with IP: %s Level: %sdBm (%s)\n", 
+				info.ssid, info.ip, String(info.rssi), info.rssiLevel
+			);
+			//callEvent(MWS_CONNECT_TO_SERVER, client);
+			mprint("Connecting to server %s:%s...", host, String(port));
+			
+			if (client->connect(host, port)){
+				mprint("\nConnected!");
+				mprint("\nRequest upgrade to WebSocket Protocol...");
+			}else{
+				mprint("\nConnection error");
+			}	
+
+
+		}else{
+			mprint("Erro in connection WiFi: %s", info.messageError);
+		}
+	});
+	// --------------------------------------------------------------------------------
+	onEvent<WiFiClient>(MWS_CONNECT_TO_SERVER, [&](WiFiClient _client){
+			mprint("Connecting to server %s:%s...", host, String(port));
+			
+			if (client->connect(host, port)){
+				mprint("\nConnected!");
+				mprint("\nRequest upgrade to WebSocket Protocol...");
+			}else{
+				mprint("\nConnection error");
+			}		
+	});
+	// --------------------------------------------------------------------------------
+
+	int32_t timeout = millis() + 5000;
+	callEvent(MWS_CONNECT_TO_WIFI, timeout);
 	return true;
 }
 
@@ -31,4 +76,3 @@ String MGraphQL::getDeviceSerialNumber(){
   snprintf(serialNumber, sizeof(serialNumber), "%04X%08X",(uint16_t)(chipId >> 32), (uint32_t)chipId);
 	return String(serialNumber);
 }
-
