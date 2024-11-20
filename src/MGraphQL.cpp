@@ -5,6 +5,14 @@ bool MGraphQL::begin(char* host, int port, char* path){
 	this->_port = port;
 	this->_path = path;
 	//_callback_ws_event(MWS_CONNECT_WIFI);
+
+	if (client.connect(host, port)){
+		mprint("....");
+	}
+	
+	
+
+	return true;
 }
 
 void MGraphQL::setSerialListener(std::function<void(char *message)> callback){ 

@@ -22,6 +22,7 @@ typedef enum {
 
 class MGraphQL{
 	private:
+		WiFiClient client;
 		char* _host;
 		char* _path;
 		int _port;

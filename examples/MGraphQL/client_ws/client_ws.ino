@@ -11,6 +11,22 @@ MGraphQL gql;
 void setup(){
   Serial.begin(115200);
 
+	 WiFi.begin(ssid, ssid_password);
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected");  
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  gql.setSerialListener([&](char * message){
+    Serial.print(message);
+  });
+
   // gql.setGraphQLEvent([&](mws_event_t event){
   //   if (event == MWS_CONNECT_WIFI){
   //     Serial.print("Connecting to WiFi");
