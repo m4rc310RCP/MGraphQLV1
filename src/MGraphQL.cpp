@@ -1,35 +1,67 @@
 #include "MGraphQL.h"
 
 bool MGraphQL::begin(char* host, int port, char* path){
-	this->_host = host;
-	this->_port = port;
-	this->_path = path;
-	//_callback_ws_event(MWS_CONNECT_WIFI);
+		client.setInsecure();
+		if(client.connect(host, port)){
+			mprint("Requesting upgrade protocol to websocket...");
+			char buf[1024];
+			sprintf_P(buf, PSTR("GET %s HTTP/1.1\r\n"
+												"Host: %s\r\n"
+												"Upgrade: websocket\r\n"
+												"Connection: Upgrade\r\n"
+												"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+												"Origin: https://%s\r\n"
+												"Sec-WebSocket-Protocol: graphql-ws\r\n"
+												"Sec-WebSocket-Version: 13\r\n\r\n"),
+			path, host, host);
 
-	if (client.connect(host, port)){
-		mprint("....");
-	}
+			bool wsupdated = false;
+			bool endOfResponse = false;
+			String s;
+			client.write((uint8_t*)buf, strlen(buf)); 
+			while (!endOfResponse && (s = client.readStringUntil('\n')).length() > 0) {
+				if (s.indexOf("HTTP/") != -1) {
+					auto status = s.substring(9, 12);
+					if (status == "101"){
+						wsupdated = true;
+					}else {
+						wsupdated = false;
+					}
+				} else if (s == "\r"){
+					endOfResponse = true;
+				}
+			};
+			if (wsupdated){
+				mprint("Websocket upgrade headers success!");
+			}
+		}else{
+			mprint("Websocket upgrade headers ERROR!");
+		}
+	//client.setInsecure();
 	
-	
+	// onEvent<ConnectionInfo>(MWS_CONNECT_WIFI_OK, [&](ConnectionInfo info){
+	// 	mprint("Connected in WiFi %s with IP: %s Signal Level: %sdBm (%s)",
+	// 		info.ssid, info.ip, String(info.rssi), info.rssiLevel
+	// 	);
 
+	// });
+
+	//mprint("Connecting in WiFi...");
+	//callEvent<int32_t>(MWS_CONNECT_WIFI, millis() + 5000);
+
+
+	// if (client.connect(host, port)){
+	// 	mprint("Try upgrade for websocket protocol...");
+	// }
 	return true;
 }
 
-void MGraphQL::setSerialListener(std::function<void(char *message)> callback){ 
-	_callback_serial_print = callback;
-};
-
 void MGraphQL::mprint(const char *format, ...) {
-	  if (_callback_serial_print) {
-				va_list args;
-				va_start(args, format);
-				size_t size = 256; 
-				char buffer[size];
-				vsnprintf(buffer, size, format, args);
-				_callback_serial_print(buffer);
-				va_end(args);
-    } else {
-        Serial.println("** Callback não definido **");
-    }
+    char buffer[256];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    callEvent(MWS_STREAMING_MESSAGE, buffer);
 }
 

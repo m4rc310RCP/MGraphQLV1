@@ -11,21 +11,45 @@ MGraphQL gql;
 void setup(){
   Serial.begin(115200);
 
-	 WiFi.begin(ssid, ssid_password);
-  
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
 
-  Serial.println("");
-  Serial.println("WiFi connected");  
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-
-  gql.setSerialListener([&](char * message){
-    Serial.print(message);
+  gql.onEvent<char*>(MWS_STREAMING_MESSAGE, [&](char * message){
+    Serial.println(message);
   });
+
+    ConnectionInfo info;
+    info.sucess = false;
+
+    WiFi.begin(ssid, ssid_password);
+    //WiFi.config(WiFi.localIP(), WiFi.gatewayIP(), WiFi.subnetMask(), primaryDNS, secondaryDNS);
+    while(WiFi.status() != WL_CONNECTED){
+      gql.mprint(".");
+      delay(1000);
+    }
+
+    info.ip   = WiFi.localIP().toString();
+    info.ssid = WiFi.SSID();
+    info.rssi = WiFi.RSSI();
+    if (info.rssi > -50) {
+      info.rssiLevel = "Excellent";
+    } else if (info.rssi > -70) {
+        info.rssiLevel = "Good";
+    } else if (info.rssi > -85) {
+        info.rssiLevel = "Weak";
+    } else {
+        info.rssiLevel = "Poor";
+    }
+    
+    gql.mprint("WiFi connected IP: ", info.ip);
+
+  // gql.onEvent<int32_t>(MWS_CONNECT_WIFI, [&](int32_t timeout){
+
+  //   gql.callEvent(MWS_CONNECT_WIFI_OK, info);
+  // });
+
+
+  // gql.setSerialListener([&](char * message){
+  //   Serial.print(message);
+  // });
 
   // gql.setGraphQLEvent([&](mws_event_t event){
   //   if (event == MWS_CONNECT_WIFI){
