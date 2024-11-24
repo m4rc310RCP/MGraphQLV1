@@ -1,6 +1,5 @@
 #include "MGraphQL.h"
-#include <WiFiClientSecure.h>
-#include <WiFi.h>
+
 #define CRLF "\r\n"
 
 MGraphQL::MGraphQL(bool secure){
@@ -14,18 +13,18 @@ MGraphQL::MGraphQL(bool secure){
 	// }
 
 
-	this->_callbackControlEvent = [](auto) {};
+	//this->_callbackControlEvent = [](auto) {};
 }
 
 MGraphQL::~MGraphQL() {
 	delete this->client;
 }
 
-void MGraphQL::callEvent(_control_event event){
-	if(_callbackControlEvent != nullptr){
-		_callbackControlEvent(event);
-	}
-}
+// void MGraphQL::callEvent(_control_event event){
+// 	if(_callbackControlEvent != nullptr){
+// 		_callbackControlEvent(event);
+// 	}
+// }
 
 bool MGraphQL::begin(char* host, int port, char* path){
 	_host = host;
@@ -37,7 +36,7 @@ bool MGraphQL::begin(char* host, int port, char* path){
 }
 
 void MGraphQL::requestWsUpdate(){
-	mprint("\nSending websocket upgrade headers\n");
+	mprint(PSTR("\nSending websocket upgrade headers\n"));
 
 	if (this->secure) {
     WiFiClientSecure* secureClient = static_cast<WiFiClientSecure*>(this->client);
@@ -45,7 +44,7 @@ void MGraphQL::requestWsUpdate(){
   }
 
 	if (client->connect(_host, _port)){
-		char buf[1024];
+		char buf[256];
 		sprintf_P(buf, PSTR("GET %s HTTP/1.1\r\n"
 												"Host: %s\r\n"
 												"Upgrade: websocket\r\n"
@@ -77,22 +76,25 @@ void MGraphQL::requestWsUpdate(){
 		}
 
 		if (wsupdated){
-			mprint("\nWebsocket upgrade headers success!\n");
-			handshake();
+			mprint(PSTR("\nWebsocket upgrade headers success!\n"));
+			if(!handshake()){
+				mprint(PSTR("\nWebsocket no handshake. Trying reconnect websocket...\n"));
+				reconnect();
+			}
 		}
 	}else{
-		mprint("\nUnable to connect to the server\n");
+		mprint(PSTR("\nUnable to connect to the server\n"));
 	}
 }
 
-
-void MGraphQL::onEvent(std::function<void(_control_event)> event){
-	this->_callbackControlEvent = event;
-}
+// void MGraphQL::onEvent(std::function<void(_control_event)> event){
+// 	this->_callbackControlEvent = event;
+// }
 
 void MGraphQL::onSerialPrint(std::function<void(char*)> callback){
 	this->_callbackSerialPrint = callback;
 }
+
 void MGraphQL::mprint(char* format, ...){
 	if(this->_callbackSerialPrint != nullptr){
 		va_list args;
@@ -126,23 +128,50 @@ void MGraphQL::connectWiFi(char * wifi_ssid, char * wifi_password){
 	}else{
 		mprint("\nError in connetion WiFi for timeout\n");
 	}
-	
 }
 
 void MGraphQL::loop(void){
+
+	int32_t currentMillis = millis();
+
+	if (currentMillis > this->heartbeatMillis && this->client->connected()){
+		inHeartBeat = false;
+		reconnect();
+		return;
+	}
+
 	if(connectingWiFi && WiFi.status() != WL_CONNECTED){
 		connectingWiFi = false;
 		callEvent(MWS_CONNECT_TO_WIFI);
 	}else{
 		if (canRead && client->available()){
-			//canRead = false;
 			String msg;
 			if (getMessage(msg)){
-				mprint("Handshake: %s \n", msg.c_str());
+				size_t jsonSize = msg.length() + JSON_OBJECT_SIZE(10);
+				DynamicJsonDocument doc(jsonSize);
+				DeserializationError error = deserializeJson(doc, msg);
+				if (error) {
+					mprint(PSTR("Error to deserialization JSON: %s"), error.c_str());
+					return;
+				}
+
+				String id        = doc["id"];
+				const char* type = doc["type"];
+
+				if (type && strcmp(type, "data") == 0){
+					JsonObject data = doc["payload"]["data"];
+					String dataString;
+        	serializeJson(data, dataString);
+					callEvent(id, dataString);
+				}
+   		}
+ 
+				//callEvent<String>(MWS_INIT_STREAMING, msg);
+				//mprint("Handshake: %s \n", msg.c_str());
 			}
 		}
 	}
-}
+
 
 void MGraphQL::mwrite(const char* buffer, std::function<void(String response)> payload) {
     if (client->connected()) { 
@@ -159,12 +188,6 @@ void MGraphQL::mwrite(const char* buffer, std::function<void(String response)> p
 							payload(temp);
 						}
 					}
-
-
-					// char buf[1024];
-					// valread = client->readBytes((uint8_t*)buf, sizeof(buf));
-					// buf[valread] = '\0';
-					// payload(buf); 
 					break;
 				}
 			}
@@ -176,11 +199,11 @@ void MGraphQL::mwrite(const char* buffer, std::function<void(String response)> p
 }
 
 bool MGraphQL::handshake(){
-	String payload = R"({"type":"connection_init", "payload":{"Authorization": "Test test:test"}})";
-	// String payload = R"(char *payloadStart = R"({"id":"1","type":"start","payload":{"variables":{},"extensions":{},"operationName":"TEST","query":"subscription {\n  mostrarInformacoesServidor {\n    dt_pulso\n  }\n}\n"}})";
+	String payload = PSTR(R"({"type":"connection_init", "payload":{"Authorization": "Test test:test"}})");
 	send(payload);
 	int timeout = millis() + 10000;
-	bool response = false;
+	bool response   = false;
+	bool ackSuccess = false;
 	while(millis() <= timeout){
 		String msg;
 		if (getMessage(msg)){
@@ -188,30 +211,26 @@ bool MGraphQL::handshake(){
 			DeserializationError error = deserializeJson(doc, msg);
 			response = true;
 			if (error){
-				mprint("Error in convert json response ACK: %s", error.c_str());
+				mprint(PSTR("Error in convert json response ACK: %s"), error.c_str());
 				response = false;
+				ackSuccess = false;
 			}else{
 				const char* type = doc["type"];
 				if (strcmp(type, "connection_ack") == 0) {
-					mprint("Resp: %s", type);
-					String paydata = R"({"id":"1","type":"start","payload":{"variables":{},"extensions":{},"operationName":"ServerInfo","query":"subscription ServerInfo {\n  mostrarInformacoesServidor {\n    dt_pulso\n  }\n}\n"}})";
-					send(paydata);
+					//String paydata = R"({"id":"1","type":"start","payload":{"variables":{"serial":"3005EBAE3D98"},"extensions":{},"operationName":null,"query":"subscription {\n  CONTROLE(nr_serie: \"3005EBAE3D98\") {\n    ds_acao\n    parametro {\n      ds_item\n      ds_estado\n    }\n  }\n}\n"}})";
+					//send(paydata);
 					canRead = true;
+					ackSuccess = true;
+					startSubscriptions();
+				}else{
+					ackSuccess = false;
 				}
 			}
 			break;
 		}
 		delay(100);
 	}
-	
-	//canRead = true;
-	
-	// const char *buff = spayload.c_str();
-	// mprint("Waiting for handshake.\n");
-	// mwrite(buff, [&](String msg){
-	// 	mprint("Handshake: %s \n", msg.c_str());
-	// });
-	return true;
+	return ackSuccess;
 }
 
 std::string formatString(const std::string& format, ...) {
@@ -307,12 +326,108 @@ int MGraphQL::timedRead(){
 	return client->read();
 }
 
-		// void MGraphQL::write(uint8_t data){
-		// 	if (client->connected()){
-		// 		client->write(data, strlen(data)); 
-		// 	}
-		// }
-		
-		// void MGraphQL::write(char * data){
-		// 	write((uint8_t)data); 
-		// }
+void MGraphQL::callAction(const String& actionKey, JsonObject data){
+	mprint("\ncallAction~> %s", actionKey.c_str());
+	if (this->_action_functions.count(actionKey)){
+		this->_action_functions[actionKey](data);
+	}else{
+		mprint(PSTR("No action %s registered!"), actionKey);
+	}
+}
+
+void MGraphQL::subscription(String& query, String& variables,  std::function<void(String)> dataJson){
+	String id = String(++this->subscriptionId);
+	this->subscription(id, query, variables, dataJson);
+}
+
+void MGraphQL::subscription(String& id, String& query, String& variables,  std::function<void(String)> dataJson){
+	query = formatJson(query);
+	variables = formatJson(variables);
+
+	size_t capacity = JSON_OBJECT_SIZE(4) + JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(1) + variables.length() + query.length() + 256;
+	DynamicJsonDocument doc(capacity);
+	doc["id"] = id;
+  doc["type"] = "start"; 
+	JsonObject payload = doc.createNestedObject("payload");
+
+	String operationName = extractOperationName(query);
+	payload["operationName"] = operationName.isEmpty() ? nullptr : operationName.c_str();
+
+	if (variables.isEmpty()){
+		payload["variables"] = nullptr;
+	}else{
+		//capacity = measureJson(variables.c_str()) + 128;
+		DynamicJsonDocument docVariables(256);
+		DeserializationError error = deserializeJson(docVariables, variables);
+		if (error){
+			mprint("DeserializationError: %s", error.c_str());
+		}else{
+			payload["variables"].set(docVariables.as<JsonObject>());
+		}
+	}
+
+	payload["query"] = query;
+	payload.createNestedObject("extensions"); 
+
+	String jsonString;
+  serializeJson(doc, jsonString);
+	//mprint("ID:%s - %s", id.c_str(), jsonString.c_str());
+	this->onEvent<String>(id, [=](String responseJson){
+		//mprint(PSTR("-----------> %s"), responseJson.c_str());
+		dataJson(responseJson);
+	});
+	send(jsonString);
+}//subscription
+
+void MGraphQL::reconnect() {
+	this->canRead = false;
+	this->client->stop();
+	requestWsUpdate();
+}
+
+void MGraphQL::startSubscriptions(){
+	this->heartbeatMillis = millis() + 10000;
+	subscriptionId = 0;
+	String query = PSTR(R"(
+		subscription{
+			mostrarInformacoesServidor{
+				dt_pulso
+				nr_versao
+			}
+	})");
+
+	String variables = "";
+
+	subscription(query, variables, [&](String jsonData){
+		this->heartbeatMillis = millis() + 11000;
+		mprint("\n~> HB");
+		if(!inHeartBeat){
+			inHeartBeat = true;
+			mprint("\n~> Reconnected to Server\n");
+			callEvent(MWS_INIT_SUBSCRIPTIONS);
+		}
+	});
+}
+
+String MGraphQL::formatJson(String jsonString){
+  jsonString.replace("\n", " ");
+  jsonString.replace("\t", " ");
+	while (jsonString.indexOf("  ") != -1) {
+			jsonString.replace("  ", " ");
+	}
+	jsonString.trim();
+	return jsonString;
+}
+
+String MGraphQL::extractOperationName(const String& query) {
+    std::regex regex(PSTR(R"((query|mutation|subscription)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*)"));
+    std::cmatch match;
+
+    std::string queryStd = query.c_str();
+
+    if (std::regex_search(queryStd.c_str(), match, regex)) {
+        return String(match[2].str().c_str());
+    }
+
+    return "";
+}
